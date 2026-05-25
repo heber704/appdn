@@ -38,11 +38,11 @@ export async function POST(req: NextRequest) {
   const plano = await prisma.planoTeste.create({
     data: {
       titulo: body.titulo,
-      descricao: body.descricao,
-      versao: body.versao,
+      objetivo: body.objetivo,
+      escopo: body.escopo,
+      estrategia: body.estrategia,
       projeto_id: body.projeto_id,
-      criador_id: Number((session.user as any).id),
-      status: 'RASCUNHO',
+      status: 'Rascunho',
     },
   })
   return NextResponse.json({ plano }, { status: 201 })
