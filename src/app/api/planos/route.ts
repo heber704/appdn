@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       include: {
         projeto: { select: { id: true, nome: true } },
       },
-      orderBy: { criado_em: 'desc' },
+      orderBy: { criadoEm: 'desc' },
     })
     return NextResponse.json({ planos })
   } catch (e) {
