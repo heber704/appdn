@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       objetivo: body.objetivo,
       escopo: body.escopo,
       estrategia: body.estrategia,
-      projeto_id: body.projeto_id,
+      projetoId: body.projeto_id,
       status: 'Rascunho',
     },
   })
