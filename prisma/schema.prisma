@@ -1,0 +1,384 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USUÁRIOS ────────────────────────────────────────────────────────────────
+
+model Usuario {
+  id           Int      @id @default(autoincrement())
+  nome         String   @db.VarChar(150)
+  email        String   @unique @db.VarChar(200)
+  login        String   @unique @db.VarChar(100)
+  senha        String   @db.VarChar(255)
+  cargo        String   @default("Aguardando Atribuição") @db.VarChar(100)
+  situacao     String   @default("Ativo") @db.VarChar(20)
+  bloqueioTipo String?  @map("bloqueio_tipo") @db.VarChar(20)
+  fotoPerfil   Bytes?   @map("foto_perfil") @db.LongBlob
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  resetSenhas       ResetSenha[]
+  notificacoes      Notificacao[]
+  bugsAtribuidos    Bug[]         @relation("BugResponsavel")
+  bugsReportados    Bug[]         @relation("BugReportador")
+  execucoes         ExecucaoTeste[]
+  auditoria         Auditoria[]
+  projetosAssoc     ProjetoMembro[]
+  solicitacoes      Solicitacao[]
+  comentariosBug    ComentarioBug[]
+
+  @@map("usuarios")
+}
+
+model ResetSenha {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int      @map("usuario_id")
+  token      String   @db.VarChar(10)
+  expiraEm   DateTime @map("expira_em")
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("reset_senha")
+}
+
+// ─── PROJETOS ────────────────────────────────────────────────────────────────
+
+model Projeto {
+  id           Int      @id @default(autoincrement())
+  nome         String   @db.VarChar(200)
+  descricao    String?  @db.Text
+  status       String   @default("Em andamento") @db.VarChar(30)
+  dataInicio   DateTime @map("data_inicio")
+  dataPrevisao DateTime? @map("data_previsao")
+  imagem       Bytes?   @db.LongBlob
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  membros      ProjetoMembro[]
+  requisitos   Requisito[]
+  casosTeste   CasoTeste[]
+  ciclos       CicloTeste[]
+  bugs         Bug[]
+  planos       PlanoTeste[]
+  solicitacoes Solicitacao[]
+
+  @@map("projetos")
+}
+
+model ProjetoMembro {
+  id        Int      @id @default(autoincrement())
+  projetoId Int      @map("projeto_id")
+  usuarioId Int      @map("usuario_id")
+  papel     String   @default("Membro") @db.VarChar(50)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([projetoId, usuarioId])
+  @@map("projeto_membros")
+}
+
+// ─── REQUISITOS ──────────────────────────────────────────────────────────────
+
+model Requisito {
+  id          Int      @id @default(autoincrement())
+  projetoId   Int      @map("projeto_id")
+  codigo      String   @db.VarChar(30)
+  titulo      String   @db.VarChar(300)
+  descricao   String?  @db.Text
+  tipo        String   @default("Funcional") @db.VarChar(30)
+  status      String   @default("Pendente") @db.VarChar(30)
+  imagem      Bytes?   @db.LongBlob
+  criadoEm   DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  projeto    Projeto    @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  casosTeste CasoTeste[]
+  bugs       Bug[]
+
+  @@map("requisitos")
+}
+
+// ─── CASOS DE TESTE ──────────────────────────────────────────────────────────
+
+model CasoTeste {
+  id            Int      @id @default(autoincrement())
+  projetoId     Int      @map("projeto_id")
+  requisitoId   Int?     @map("requisito_id")
+  titulo        String   @db.VarChar(300)
+  descricao     String?  @db.Text
+  preCondicoes  String?  @map("pre_condicoes") @db.Text
+  posCondicoes  String?  @map("pos_condicoes") @db.Text
+  tipo          String   @default("Funcional") @db.VarChar(30)
+  prioridade    String   @default("Média") @db.VarChar(20)
+  status        String   @default("Pendente") @db.VarChar(30)
+  versao        Int      @default(1)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  projeto    Projeto    @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  requisito  Requisito? @relation(fields: [requisitoId], references: [id])
+  passos     PassoTeste[]
+  execucoes  ExecucaoTeste[]
+  cicloItems CicloItem[]
+
+  @@map("casos_teste")
+}
+
+model PassoTeste {
+  id              Int    @id @default(autoincrement())
+  casoTesteId     Int    @map("caso_teste_id")
+  ordem           Int
+  descricao       String @db.Text
+  resultadoEsperado String @map("resultado_esperado") @db.Text
+
+  casoTeste    CasoTeste      @relation(fields: [casoTesteId], references: [id], onDelete: Cascade)
+  resultados   ResultadoPasso[]
+
+  @@map("passos_teste")
+}
+
+// ─── CICLOS DE TESTE ─────────────────────────────────────────────────────────
+
+model CicloTeste {
+  id          Int      @id @default(autoincrement())
+  projetoId   Int      @map("projeto_id")
+  nome        String   @db.VarChar(200)
+  status      String   @default("Planejado") @db.VarChar(30)
+  dataInicio  DateTime @map("data_inicio")
+  dataFim     DateTime @map("data_fim")
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  projeto  Projeto     @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  itens    CicloItem[]
+  execucoes ExecucaoTeste[]
+  planos    PlanoTesteCiclo[]
+
+  @@map("ciclos_teste")
+}
+
+model CicloItem {
+  id          Int @id @default(autoincrement())
+  cicloId     Int @map("ciclo_id")
+  casoTesteId Int @map("caso_teste_id")
+
+  ciclo     CicloTeste @relation(fields: [cicloId], references: [id], onDelete: Cascade)
+  casoTeste CasoTeste  @relation(fields: [casoTesteId], references: [id])
+
+  @@unique([cicloId, casoTesteId])
+  @@map("ciclo_itens")
+}
+
+// ─── EXECUÇÃO DE TESTES ──────────────────────────────────────────────────────
+
+model ExecucaoTeste {
+  id           Int      @id @default(autoincrement())
+  casoTesteId  Int      @map("caso_teste_id")
+  cicloId      Int?     @map("ciclo_id")
+  executorId   Int      @map("executor_id")
+  resultado    String   @default("Não executado") @db.VarChar(30)
+  observacoes  String?  @db.Text
+  iniciadoEm   DateTime @default(now()) @map("iniciado_em")
+  finalizadoEm DateTime? @map("finalizado_em")
+  duracaoSeg   Int?     @map("duracao_seg")
+
+  casoTeste CasoTeste  @relation(fields: [casoTesteId], references: [id])
+  ciclo     CicloTeste? @relation(fields: [cicloId], references: [id])
+  executor  Usuario    @relation(fields: [executorId], references: [id])
+  resultadosPassos ResultadoPasso[]
+
+  @@map("execucoes_teste")
+}
+
+model ResultadoPasso {
+  id           Int    @id @default(autoincrement())
+  execucaoId   Int    @map("execucao_id")
+  passoId      Int    @map("passo_id")
+  resultado    String @default("Não executado") @db.VarChar(30)
+  observacao   String? @db.Text
+  evidencia    Bytes?  @db.LongBlob
+
+  execucao ExecucaoTeste @relation(fields: [execucaoId], references: [id], onDelete: Cascade)
+  passo    PassoTeste    @relation(fields: [passoId], references: [id])
+
+  @@map("resultados_passo")
+}
+
+// ─── BUGS ────────────────────────────────────────────────────────────────────
+
+model Bug {
+  id               Int      @id @default(autoincrement())
+  projetoId        Int      @map("projeto_id")
+  requisitoId      Int?     @map("requisito_id")
+  responsavelId    Int?     @map("responsavel_id")
+  reportadoPorId   Int      @map("reportado_por_id")
+  titulo           String   @db.VarChar(300)
+  descricao        String   @db.Text
+  passosReproducao String?  @map("passos_reproducao") @db.Text
+  resultadoEsperado String? @map("resultado_esperado") @db.Text
+  resultadoObtido  String?  @map("resultado_obtido") @db.Text
+  severidade       String   @default("Médio") @db.VarChar(20)
+  prioridade       String   @default("Média") @db.VarChar(20)
+  status           String   @default("Aberto") @db.VarChar(30)
+  ambiente         String?  @db.VarChar(200)
+  versaoSistema    String?  @map("versao_sistema") @db.VarChar(50)
+  criadoEm        DateTime @default(now()) @map("criado_em")
+  atualizadoEm    DateTime @updatedAt @map("atualizado_em")
+
+  projeto     Projeto   @relation(fields: [projetoId], references: [id])
+  requisito   Requisito? @relation(fields: [requisitoId], references: [id])
+  responsavel Usuario?  @relation("BugResponsavel", fields: [responsavelId], references: [id])
+  reportadoPor Usuario  @relation("BugReportador", fields: [reportadoPorId], references: [id])
+  imagens     ImagemBug[]
+  historico   HistoricoBug[]
+  comentarios ComentarioBug[]
+
+  @@map("bugs")
+}
+
+model ImagemBug {
+  id       Int    @id @default(autoincrement())
+  bugId    Int    @map("bug_id")
+  imagem   Bytes  @db.LongBlob
+  nome     String @db.VarChar(200)
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  bug Bug @relation(fields: [bugId], references: [id], onDelete: Cascade)
+
+  @@map("imagens_bug")
+}
+
+model HistoricoBug {
+  id         Int      @id @default(autoincrement())
+  bugId      Int      @map("bug_id")
+  campo      String   @db.VarChar(100)
+  valorAntes String?  @map("valor_antes") @db.Text
+  valorDepois String? @map("valor_depois") @db.Text
+  alteradoEm DateTime @default(now()) @map("alterado_em")
+
+  bug Bug @relation(fields: [bugId], references: [id], onDelete: Cascade)
+
+  @@map("historico_bugs")
+}
+
+model ComentarioBug {
+  id        Int      @id @default(autoincrement())
+  bugId     Int      @map("bug_id")
+  usuarioId Int      @map("usuario_id")
+  texto     String   @db.Text
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  bug     Bug     @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("comentarios_bug")
+}
+
+// ─── PLANO DE TESTE ──────────────────────────────────────────────────────────
+
+model PlanoTeste {
+  id            Int      @id @default(autoincrement())
+  projetoId     Int      @map("projeto_id")
+  titulo        String   @db.VarChar(200)
+  objetivo      String?  @db.Text
+  escopo        String?  @db.Text
+  criteriosEntrada String? @map("criterios_entrada") @db.Text
+  criteriosSaida   String? @map("criterios_saida") @db.Text
+  estrategia    String?  @db.Text
+  status        String   @default("Rascunho") @db.VarChar(30)
+  imagem        Bytes?   @db.LongBlob
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  projeto Projeto           @relation(fields: [projetoId], references: [id])
+  ciclos  PlanoTesteCiclo[]
+
+  @@map("planos_teste")
+}
+
+model PlanoTesteCiclo {
+  id          Int @id @default(autoincrement())
+  planoId     Int @map("plano_id")
+  cicloId     Int @map("ciclo_id")
+
+  plano PlanoTeste @relation(fields: [planoId], references: [id], onDelete: Cascade)
+  ciclo CicloTeste @relation(fields: [cicloId], references: [id])
+
+  @@unique([planoId, cicloId])
+  @@map("plano_teste_ciclos")
+}
+
+// ─── AMBIENTES ───────────────────────────────────────────────────────────────
+
+model Ambiente {
+  id              Int    @id @default(autoincrement())
+  nome            String @db.VarChar(150)
+  sistemaOperacional String? @map("sistema_operacional") @db.VarChar(100)
+  navegador       String? @db.VarChar(100)
+  versao          String? @db.VarChar(50)
+  status          String  @default("Disponível") @db.VarChar(30)
+
+  @@map("ambientes")
+}
+
+// ─── SOLICITAÇÕES ─────────────────────────────────────────────────────────────
+
+model Solicitacao {
+  id           Int      @id @default(autoincrement())
+  projetoId    Int?     @map("projeto_id")
+  usuarioId    Int      @map("usuario_id")
+  titulo       String   @db.VarChar(300)
+  descricao    String   @db.Text
+  passos       String?  @db.Text
+  severidade   String   @default("Médio") @db.VarChar(20)
+  status       String   @default("Aguardando análise") @db.VarChar(30)
+  imagem       Bytes?   @db.LongBlob
+  criadoEm    DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  projeto Projeto? @relation(fields: [projetoId], references: [id])
+  usuario Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@map("solicitacoes")
+}
+
+// ─── NOTIFICAÇÕES ────────────────────────────────────────────────────────────
+
+model Notificacao {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int      @map("usuario_id")
+  titulo    String   @db.VarChar(200)
+  mensagem  String   @db.Text
+  tipo      String   @default("info") @db.VarChar(30)
+  lida      Boolean  @default(false)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("notificacoes")
+}
+
+// ─── AUDITORIA ───────────────────────────────────────────────────────────────
+
+model Auditoria {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int?     @map("usuario_id")
+  acao      String   @db.VarChar(100)
+  entidade  String   @db.VarChar(100)
+  entidadeId Int?    @map("entidade_id")
+  detalhes  String?  @db.Text
+  ip        String?  @db.VarChar(45)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@map("auditoria")
+}
