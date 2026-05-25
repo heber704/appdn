@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  
+
   const { searchParams } = new URL(req.url)
   const busca = searchParams.get('busca') || ''
   const status = searchParams.get('status') || 'TODOS'
@@ -20,7 +20,6 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         projeto: { select: { id: true, nome: true } },
-        aprovador: { select: { nome: true } },
       },
       orderBy: { criado_em: 'desc' },
     })
@@ -34,7 +33,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  
+
   const body = await req.json()
   const plano = await prisma.planoTeste.create({
     data: {
